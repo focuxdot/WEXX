@@ -1,6 +1,6 @@
 # wexx
 
-**在微信里,给你电脑上的 Codex 派活。**
+**一个连接微信和 Codex 的 Skill,通过微信 Clawbot 给你电脑上的 Codex 派活。**
 
 发一条微信 → 电脑上的 Codex 开始干活 → 结果回到微信。
 
