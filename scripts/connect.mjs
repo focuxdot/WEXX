@@ -159,6 +159,13 @@ async function presentQr(payload) {
     console.log(`二维码图片: ${paths.qrPngFile}`);
     if (process.platform === "darwin") {
       spawn("open", [paths.qrPngFile], { detached: true, stdio: "ignore" }).unref();
+    } else if (process.platform === "win32") {
+      // start 的第一个引号参数是窗口标题,占位空串防止路径被当标题
+      spawn("cmd.exe", ["/c", "start", "", paths.qrPngFile], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+      }).unref();
     }
   } catch {
   }
@@ -170,6 +177,7 @@ function startDaemonDetached() {
     cwd: ROOT,
     detached: true,
     stdio: "ignore",
+    windowsHide: true,
   });
   child.unref();
   return child.pid;

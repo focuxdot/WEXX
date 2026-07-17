@@ -16,7 +16,7 @@
 
 **第 3 步:派活。** 在微信里发出第一条消息,开始干活。
 
-> 前提:macOS + 装好的 Codex + Node.js 18+。
+> 前提:macOS 或 Windows + 装好的 Codex + Node.js 18+。
 > 不想让 Codex 装?终端里一行也可以:
 > ```bash
 > git clone https://github.com/focuxdot/WEXX.git ~/.codex/skills/wexx && cd ~/.codex/skills/wexx && npm install
@@ -47,7 +47,7 @@
 ## 限制
 
 - 电脑休眠或关机时不干活(消息不丢,唤醒后继续)。
-- 目前仅支持 macOS。
+- 支持 macOS 和 Windows(Windows 版刚推出,欢迎反馈);Linux 可手动运行,暂无开机自启。
 - 产出的文件保存在电脑上(`Documents/Codex/`),会告诉你路径;文件直接发回微信,在计划中。
 
 ## 它是怎么工作的

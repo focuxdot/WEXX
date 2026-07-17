@@ -6,11 +6,12 @@ import readline from "node:readline";
 
 const DEFAULT_CODEX_BIN = "codex";
 
-// launchd/开机自启环境的 PATH 极简,bare "codex" 找不到,必须解析为绝对路径。
+// 开机自启环境(launchd/任务计划程序)的 PATH 极简,bare "codex" 找不到,
+// 必须解析为绝对路径。探测位置按平台分列(参照 CXX 的 codex-path)。
 export function resolveCodexBin(preferred) {
   const candidates = [preferred, process.env.WEXX_CODEX_BIN].filter(Boolean);
   for (const candidate of candidates) {
-    if (candidate.includes(path.sep)) {
+    if (candidate.includes("/") || candidate.includes("\\")) {
       if (existsSync(candidate)) return candidate;
     } else {
       const found = whichSafe(candidate);
@@ -19,24 +20,51 @@ export function resolveCodexBin(preferred) {
   }
   const found = whichSafe("codex");
   if (found) return found;
-  const home = os.homedir();
-  const probes = [
+  for (const probe of codexProbePaths()) {
+    if (existsSync(probe)) return probe;
+  }
+  return "codex";
+}
+
+export function codexProbePaths({ platform = process.platform, home = os.homedir(), env = process.env } = {}) {
+  if (platform === "win32") {
+    // 用 win32 的 join,保证测试在任何平台上都生成反斜杠路径
+    const w = path.win32;
+    const appdata = env.APPDATA || w.join(home, "AppData", "Roaming");
+    const local = env.LOCALAPPDATA || w.join(home, "AppData", "Local");
+    const programFiles = env.ProgramFiles || "C:\\Program Files";
+    return [
+      w.join(appdata, "npm", "codex.cmd"),
+      w.join(appdata, "npm", "codex.exe"),
+      w.join(local, "Programs", "codex", "codex.exe"),
+      w.join(programFiles, "codex", "codex.exe"),
+      w.join(home, ".codex", "bin", "codex.exe"),
+      w.join(local, "pnpm", "codex.cmd"),
+      w.join(local, "pnpm", "codex.exe"),
+    ];
+  }
+  return [
     "/opt/homebrew/bin/codex",
     "/usr/local/bin/codex",
     path.join(home, ".codex", "bin", "codex"),
     path.join(home, ".local", "bin", "codex"),
     path.join(home, ".npm-global", "bin", "codex"),
   ];
-  for (const probe of probes) {
-    if (existsSync(probe)) return probe;
-  }
-  return "codex";
 }
 
 function whichSafe(name) {
   try {
-    const result = execFileSync("/usr/bin/which", [name], { encoding: "utf8" }).trim();
-    return result && existsSync(result) ? result : null;
+    const isWin = process.platform === "win32";
+    const result = execFileSync(isWin ? "where.exe" : "/usr/bin/which", [name], {
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    // where 可能返回多行,取第一条存在的
+    for (const line of result.split(/\r?\n/)) {
+      const found = line.trim();
+      if (found && existsSync(found)) return found;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -55,20 +83,26 @@ export class CodexAppServerClient {
   async connect() {
     if (this.child) return;
 
-    // codex 可能是 "#!/usr/bin/env node" 脚本;launchd 环境 PATH 极简,
-    // 把当前 node 的目录和常见 bin 目录补进子进程 PATH。
-    const augmentedPath = [
-      path.dirname(process.execPath),
-      "/opt/homebrew/bin",
-      "/usr/local/bin",
-      process.env.PATH ?? "",
-    ]
-      .filter(Boolean)
-      .join(path.delimiter);
+    // codex 可能是 "#!/usr/bin/env node" 脚本(或 Windows 的 .cmd shim);
+    // 自启环境 PATH 极简,把当前 node 的目录和常见 bin 目录补进子进程 PATH。
+    const extraDirs =
+      process.platform === "win32"
+        ? [
+            path.dirname(process.execPath),
+            path.join(process.env.APPDATA ?? path.join(os.homedir(), "AppData", "Roaming"), "npm"),
+          ]
+        : [path.dirname(process.execPath), "/opt/homebrew/bin", "/usr/local/bin"];
+    const augmentedPath = [...extraDirs, process.env.PATH ?? ""].filter(Boolean).join(path.delimiter);
 
-    this.child = spawn(this.options.codexBin, ["app-server"], {
+    const bin = this.options.codexBin;
+    // Windows 上 .cmd/.bat 不能直接 spawn(Node 会报 EINVAL),需经 shell;
+    // 路径可能含空格,shell 模式下必须整体加引号。
+    const isWinShim = process.platform === "win32" && /\.(cmd|bat)$/iu.test(bin);
+    this.child = spawn(isWinShim ? `"${bin}"` : bin, ["app-server"], {
       env: { ...process.env, ...this.options.env, PATH: augmentedPath },
+      shell: isWinShim,
       stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
     });
 
     this.child.once("exit", (code, signal) => {
