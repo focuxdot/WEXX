@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -127,9 +128,8 @@ export function writeState(paths, state) {
   };
   const tempFile = `${paths.stateFile}.${process.pid}.tmp`;
   writeFileSync(tempFile, `${JSON.stringify(next, null, 2)}\n`);
-  // 原子替换,daemon 崩溃不会留下半截 state
-  writeFileSync(paths.stateFile, readFileSync(tempFile));
-  rmSync(tempFile, { force: true });
+  // 同目录 rename 才是原子替换,daemon 崩溃不会留下半截 state
+  renameSync(tempFile, paths.stateFile);
   return next;
 }
 
@@ -159,15 +159,40 @@ export function rotateLogsIfNeeded(paths, maxBytes = MAX_LOG_BYTES) {
   return rotated;
 }
 
-export function readDaemonPid(paths) {
+export function readDaemonPid(paths, { looksLikeDaemon = pidLooksLikeDaemon } = {}) {
   if (!existsSync(paths.pidFile)) return null;
   const pid = Number.parseInt(readFileSync(paths.pidFile, "utf8").trim(), 10);
   if (!Number.isInteger(pid) || pid <= 0) return null;
   try {
     process.kill(pid, 0);
-    return pid;
   } catch {
     return null;
+  }
+  // pid 复用防护:重启后 pid 文件里的旧号码可能已属于无关进程,
+  // 确认命令行确实是本 daemon 再认账。
+  return looksLikeDaemon(pid) ? pid : null;
+}
+
+function pidLooksLikeDaemon(pid) {
+  try {
+    if (process.platform === "win32") {
+      const out = execFileSync(
+        "powershell",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          `(Get-CimInstance Win32_Process -Filter "ProcessId=${Number(pid)}").CommandLine`,
+        ],
+        { encoding: "utf8", windowsHide: true },
+      );
+      return /daemon[\\/]main\.mjs/u.test(out);
+    }
+    const out = execFileSync("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8" });
+    return /daemon[\\/]main\.mjs/u.test(out);
+  } catch {
+    // 查不到命令行时保守沿用旧语义(pid 活着即认为在跑),避免误判双启动
+    return true;
   }
 }
 

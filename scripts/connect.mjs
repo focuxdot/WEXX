@@ -94,7 +94,8 @@ async function login() {
     process.exitCode = 3;
     return;
   }
-  writeConsent(paths);
+  // 只记录首次同意时间,重绑不覆盖(同意的是运行模式,不是某一次扫码)
+  if (!readConsent(paths)) writeConsent(paths);
 
   console.log("正在获取微信登录二维码…");
   const { payload, qrcode } = await fetchLoginQr();
@@ -116,8 +117,15 @@ async function login() {
   writeAccount(paths, account);
   rmSync(paths.qrPngFile, { force: true });
 
+  // 自启服务(launchd RunAtLoad / schtasks /Run)安装成功即已拉起 daemon,
+  // 不能再手动 spawn 一个——两个实例会互踩消息 cursor。仅安装失败时兜底拉起。
   const autostart = installAutostart({ daemonEntry: DAEMON_ENTRY });
-  const pid = startDaemonDetached();
+  let pid = null;
+  if (autostart.installed) {
+    await delay(2000);
+    pid = readDaemonPid(paths);
+  }
+  if (!pid) pid = startDaemonDetached();
 
   console.log(`绑定成功(微信用户 ${maskId(account.user_id)})。`);
   console.log(`daemon 已启动(pid ${pid})${autostart.installed ? ",并已设置开机自启。" : "。"}`);

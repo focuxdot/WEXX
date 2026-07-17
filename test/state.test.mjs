@@ -6,11 +6,16 @@ import { test } from "node:test";
 import {
   readAccount,
   readConsent,
+  readDaemonPid,
+  readState,
   removeAccount,
   resolvePaths,
   rotateLogsIfNeeded,
   writeAccount,
   writeConsent,
+  writeDaemonPid,
+  writeState,
+  emptyState,
 } from "../daemon/state.mjs";
 
 function makePaths() {
@@ -27,6 +32,35 @@ test("consent persists once accepted", () => {
     assert.equal(readConsent(paths), null);
     writeConsent(paths);
     assert.ok(readConsent(paths)?.accepted_at);
+  } finally {
+    cleanup();
+  }
+});
+
+test("readDaemonPid: alive pid counts only if its command is the daemon", () => {
+  const { paths, cleanup } = makePaths();
+  try {
+    // 本测试进程 pid 活着,但命令行不是 daemon/main.mjs -> pid 复用防护应拒认
+    writeDaemonPid(paths, process.pid);
+    assert.equal(readDaemonPid(paths), null);
+    // 命令行匹配时认账(注入判断器模拟)
+    assert.equal(readDaemonPid(paths, { looksLikeDaemon: () => true }), process.pid);
+    // 死 pid 直接 null
+    writeDaemonPid(paths, 999999);
+    assert.equal(readDaemonPid(paths, { looksLikeDaemon: () => true }), null);
+  } finally {
+    cleanup();
+  }
+});
+
+test("writeState replaces atomically and leaves no temp file", () => {
+  const { paths, cleanup } = makePaths();
+  try {
+    const state = emptyState();
+    state.getUpdatesBuf = "cursor-1";
+    writeState(paths, state);
+    assert.equal(readState(paths).getUpdatesBuf, "cursor-1");
+    assert.equal(existsSync(`${paths.stateFile}.${process.pid}.tmp`), false);
   } finally {
     cleanup();
   }

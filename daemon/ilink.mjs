@@ -4,6 +4,9 @@ const DEFAULT_BASE_URL = "https://ilinkai.weixin.qq.com";
 const ILINK_APP_ID = "bot";
 const ILINK_APP_CLIENT_VERSION = String((2 << 16) | (2 << 8) | 0);
 const QR_HTTP_TIMEOUT_MS = 35_000;
+// getupdates 是长轮询,超时须大于服务端持有窗口;其余接口也共用这个上限。
+// 没有超时的话,服务端挂起连接会让 daemon 永久假死(进程活着但不再收消息)。
+const REQUEST_TIMEOUT_MS = 90_000;
 export const TYPING_START = 1;
 export const TYPING_STOP = 2;
 
@@ -71,6 +74,7 @@ export class IlinkClient {
         "X-WECHAT-UIN": randomWechatUin(),
       },
       method: "POST",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     const text = await response.text();
     const parsed = text ? JSON.parse(text) : {};

@@ -6,7 +6,13 @@ import path from "node:path";
 import { CodexAppServerClient, resolveCodexBin } from "./app-server.mjs";
 import { WechatCodexRunner } from "./core.mjs";
 import { IlinkClient } from "./ilink.mjs";
-import { readAccount, resolvePaths, rotateLogsIfNeeded, writeDaemonPid } from "./state.mjs";
+import {
+  readAccount,
+  readDaemonPid,
+  resolvePaths,
+  rotateLogsIfNeeded,
+  writeDaemonPid,
+} from "./state.mjs";
 
 // 顶层代码会立即调用 installFileLogger,声明必须在其之前(TDZ)
 let logFilePath = null;
@@ -21,6 +27,14 @@ const account = readAccount(paths);
 if (!account) {
   // 以 0 退出:launchd KeepAlive(SuccessfulExit=false)下避免无绑定时的重启循环
   log("No bound WeChat account. Run the skill connect flow first.");
+  process.exit(0);
+}
+
+// 单实例锁:自启服务与手动拉起可能同时发生,两个实例会互踩消息 cursor。
+// 已有活实例时静默让位(exit 0,不触发 KeepAlive 重启)。
+const existingPid = readDaemonPid(paths);
+if (existingPid && existingPid !== process.pid) {
+  log(`daemon already running (pid ${existingPid}); this instance exits.`);
   process.exit(0);
 }
 

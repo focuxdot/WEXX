@@ -286,6 +286,9 @@ export class CodexAppServerClient {
     if (!this.child) return;
     const child = this.child;
     this.child = null;
+    // 摘掉 exit 监听,避免优雅停机被当作意外退出向 pending 广播错误
+    child.removeAllListeners("exit");
+    this.rejectAll(new Error("codex app-server closed"));
     child.kill();
   }
 }
