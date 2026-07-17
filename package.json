@@ -1,0 +1,18 @@
+{
+  "name": "wexx",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "wexx — 在微信里给你电脑上的 Codex 派活 / dispatch tasks to your local Codex from WeChat",
+  "license": "MIT",
+  "scripts": {
+    "daemon": "node daemon/main.mjs",
+    "connect": "node scripts/connect.mjs",
+    "test": "node --test test/*.test.mjs",
+    "hooks:install": "git config core.hooksPath .githooks",
+    "push:maintainer": "node scripts/git-push-maintainer.mjs"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  }
+}

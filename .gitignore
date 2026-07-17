@@ -1,0 +1,6 @@
+# 非公开文档不随开源仓库分发
+docs/
+
+node_modules/
+*.log
+.DS_Store

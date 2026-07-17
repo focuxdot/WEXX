@@ -1,0 +1,26 @@
+#!/bin/sh
+# 提交身份守卫:确认本次 commit 的作者是预期的维护者账号,
+# 防止全局 git 配置(另一个账号)误入提交历史。
+#
+# 未配置 wexx.githubAccount 时静默跳过(fork/贡献者克隆不受影响)。
+expected="$(git config wexx.githubAccount)"
+[ -z "$expected" ] && exit 0
+
+email="$(git config user.email)"
+name="$(git config user.name)"
+
+if [ -z "$email" ]; then
+  echo "pre-commit: refusing — git user.email is empty. Set it to the $expected account." >&2
+  exit 1
+fi
+
+# 维护者的 noreply 邮箱内嵌登录名(如 76761194+focuxdot@users.noreply.github.com),
+# user.name 即登录名本身;要求登录名出现在两者之一。
+case "$email$name" in
+  *"$expected"*) exit 0 ;;
+  *)
+    echo "pre-commit: refusing — identity ($name <$email>) does not match account '$expected'." >&2
+    echo "  Fix: git config user.name '$expected' && git config user.email '<$expected noreply email>'" >&2
+    exit 1
+    ;;
+esac

@@ -1,0 +1,10 @@
+#!/bin/sh
+# 推送身份守卫:push 之前确认 GitHub SSH 身份是预期的维护者账号。
+# 非零退出会中止 push,错误账号的推送永远出不去。
+# 激活方式:npm run hooks:install(设置 core.hooksPath=.githooks)。
+#
+# 未配置 wexx.githubAccount 时静默跳过(fork/贡献者克隆不受影响)。
+if [ -z "$(git config wexx.githubAccount)" ]; then
+  exit 0
+fi
+exec node "$(git rev-parse --show-toplevel)/scripts/git-push-maintainer.mjs" --check

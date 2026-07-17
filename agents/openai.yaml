@@ -1,0 +1,4 @@
+# Codex skill 调用策略:仅显式调用($wexx、/wexx),
+# 禁止模型在普通任务中隐式匹配本 skill(防误触拉起扫码/常驻进程)。
+policy:
+  allow_implicit_invocation: false
